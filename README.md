@@ -6,7 +6,6 @@
 
 ---
 
-## Powered by Manus
 
 This application is built with cutting-edge technologies:
 
@@ -76,17 +75,5 @@ The editor provides:
 Access Settings → Secrets to manage authentication tokens if needed for API integrations.
 
 ---
-
-## Next Steps
-
-Talk to Manus AI anytime to request changes or add features. You can ask for:
-
-- Document sharing and permission management (owner/editor/viewer roles)
-- Version history and time-travel to previous document states
-- Export documents as PDF or Markdown
-- Rich text formatting (bold, italic, lists, etc.)
-- Comments and annotations
-- Search across documents
-- Document templates
 
 Start collaborating now by creating your first document and inviting teammates to edit together!
