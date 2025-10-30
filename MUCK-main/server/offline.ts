@@ -1,7 +1,0 @@
-import * as Y from "yjs";
-import {
-  addOfflineOperation,
-  getOfflineQueue,
-  clearOfflineQueue,
-  getOperationsSince,
-} from "./db";\n\nexport class OfflineRecoveryManager {\n  static async queueOfflineOperation(\n    clientId: string,\n    documentId: number,\n    update: Uint8Array,\n    sequenceNumber: number\n  ): Promise<void> {\n    const updateBase64 = Buffer.from(update).toString("base64");\n    await addOfflineOperation(clientId, documentId, updateBase64, sequenceNumber);\n  }\n\n  static async recoverOfflineOperations(\n    clientId: string,\n    documentId: number,\n    ydoc: Y.Doc,\n    serverVersion: number\n  ): Promise<{ recovered: number; conflicts: number }> {\n    try {\n      const queuedOps = await getOfflineQueue(clientId, documentId);\n      if (queuedOps.length === 0) {\n        return { recovered: 0, conflicts: 0 };\n      }\n\n      let recovered = 0;\n      let conflicts = 0;\n\n      for (const queuedOp of queuedOps) {\n        try {\n          const update = Buffer.from(queuedOp.updateData, "base64");\n          Y.applyUpdate(ydoc, new Uint8Array(update));\n          recovered++;\n        } catch (error) {\n          console.error(`[Offline] Failed to apply operation:`, error);\n          conflicts++;\n        }\n      }\n\n      await clearOfflineQueue(clientId, documentId);\n      return { recovered, conflicts };\n    } catch (error) {\n      console.error(`[Offline] Recovery failed:`, error);\n      throw error;\n    }\n  }\n}\nEOF
