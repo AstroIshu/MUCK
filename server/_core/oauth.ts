@@ -3,6 +3,8 @@ import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import axios from "axios";
+import { ENV } from "./env";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -19,24 +21,60 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
 
+     if (!ENV.googleClientId || !ENV.googleClientSecret) {
+      console.error("[OAuth] Google OAuth credentials not configured");
+      res.status(500).json({ error: "OAuth configuration error" });
+      return;
+    }
+    
     try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-      const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
+      // Exchange authorization code with Google's token endpoint
+      const redirectUri = `${req.protocol}://${req.get("host")}/api/oauth/callback`;
 
-      if (!userInfo.openId) {
-        res.status(400).json({ error: "openId missing from user info" });
+      const tokenResp = await axios.post(
+        "https://oauth2.googleapis.com/token",
+        new URLSearchParams({
+          code,
+          client_id: ENV.googleClientId,
+          client_secret: ENV.googleClientSecret,
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }).toString(),
+        {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      );
+
+      const { access_token: accessToken, id_token: idToken } = tokenResp.data;
+
+      // Retrieve user info from Google's OpenID Connect userinfo endpoint
+      const userInfoResp = await axios.get("https://openidconnect.googleapis.com/v1/userinfo", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      const userInfo = userInfoResp.data as { sub?: string; name?: string; email?: string };
+
+      if (!userInfo.sub) {
+        res.status(400).json({ error: "openId (sub) missing from Google user info" });
         return;
       }
 
-      await db.upsertUser({
-        openId: userInfo.openId,
-        name: userInfo.name || null,
-        email: userInfo.email ?? null,
-        loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-        lastSignedIn: new Date(),
-      });
+      const openId = userInfo.sub;
 
-      const sessionToken = await sdk.createSessionToken(userInfo.openId, {
+      // Try to upsert the user into the DB, but don't fail the OAuth flow if the DB is unavailable
+      try {
+        await db.upsertUser({
+          openId,
+          name: userInfo.name || null,
+          email: userInfo.email ?? null,
+          loginMethod: "google",
+          lastSignedIn: new Date(),
+        });
+      } catch (dbErr) {
+        console.warn("[OAuth] Warning: failed to upsert user to DB, continuing without persistence", dbErr);
+      }
+
+      const sessionToken = await sdk.createSessionToken(openId, {
         name: userInfo.name || "",
         expiresInMs: ONE_YEAR_MS,
       });

@@ -1,0 +1,15 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: muck-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: muck
+    ports:
+      - "3307:3306"  # Using port 3307 externally, 3306 internally
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

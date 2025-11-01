@@ -6,9 +6,7 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <link rel="icon" type="image/png" href="%VITE_APP_LOGO%" />
-    <link rel="apple-touch-icon" href="%VITE_APP_LOGO%" />
-    <title>%VITE_APP_TITLE%</title>
+  <title>App</title>
     <!-- Add Google Fonts here, example:
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,10 +17,49 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+    <!-- Runtime-inserted assets and analytics. We inject them via JS so missing VITE_* vars
+         don't leave literal %VITE_*% tokens in the served HTML which can cause decode errors. -->
+    <script>
+      (function () {
+        try {
+          const APP_LOGO = "%VITE_APP_LOGO%";
+          const APP_TITLE = "%VITE_APP_TITLE%";
+          const ANALYTICS_ENDPOINT = "%VITE_ANALYTICS_ENDPOINT%";
+          const ANALYTICS_WEBSITE_ID = "%VITE_ANALYTICS_WEBSITE_ID%";
+
+          // Helper to detect unreplaced %VITE_*% tokens (Vite leaves the literal when unset)
+          const isUnreplaced = (v) => typeof v === 'string' && v.indexOf('%VITE_') === 0;
+
+          if (!isUnreplaced(APP_TITLE) && APP_TITLE) {
+            document.title = APP_TITLE;
+          }
+
+          if (!isUnreplaced(APP_LOGO) && APP_LOGO) {
+            const link = document.createElement('link');
+            link.rel = 'icon';
+            link.type = 'image/png';
+            link.href = APP_LOGO;
+            document.head.appendChild(link);
+
+            const touch = document.createElement('link');
+            touch.rel = 'apple-touch-icon';
+            touch.href = APP_LOGO;
+            document.head.appendChild(touch);
+          }
+
+          if (!isUnreplaced(ANALYTICS_ENDPOINT) && ANALYTICS_ENDPOINT && !isUnreplaced(ANALYTICS_WEBSITE_ID) && ANALYTICS_WEBSITE_ID) {
+            const s = document.createElement('script');
+            s.defer = true;
+            s.src = ANALYTICS_ENDPOINT.replace(/\/$/, '') + '/umami';
+            s.setAttribute('data-website-id', ANALYTICS_WEBSITE_ID);
+            document.body.appendChild(s);
+          }
+        } catch (e) {
+          // swallow any errors here to avoid breaking the app
+          console.warn('Runtime asset injection failed', e);
+        }
+      })();
+    </script>
   </body>
 
 </html>

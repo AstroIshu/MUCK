@@ -1,5 +1,7 @@
 import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
@@ -29,11 +31,12 @@ const GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
 const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
 
 class OAuthService {
-  constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
+  constructor(private client: ReturnType<typeof axios.create>,private appId: string) {
+    if (ENV.oAuthServerUrl && ENV.oAuthServerUrl.length > 0) {
+      console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    } else {
+      console.info(
+        "[OAuth] OAUTH_SERVER_URL is not configured — Manus OAuth client will remain disabled unless set."
       );
     }
   }
@@ -48,7 +51,7 @@ class OAuthService {
     state: string
   ): Promise<ExchangeTokenResponse> {
     const payload: ExchangeTokenRequest = {
-      clientId: ENV.appId,
+      clientId: this.appId,
       grantType: "authorization_code",
       code,
       redirectUri: this.decodeState(state),
@@ -83,12 +86,20 @@ const createOAuthHttpClient = (): AxiosInstance =>
   });
 
 class SDKServer {
+  private validateAppId(): string {
+    if (!ENV.appId) {
+      throw new Error('APP_ID environment variable is required. Please add APP_ID to your .env.local file.');
+    }
+    return ENV.appId;
+  }
+
   private readonly client: AxiosInstance;
   private readonly oauthService: OAuthService;
 
   constructor(client: AxiosInstance = createOAuthHttpClient()) {
     this.client = client;
-    this.oauthService = new OAuthService(this.client);
+    const appId = this.validateAppId(); // Validate appId first
+    this.oauthService = new OAuthService(this.client, appId);
   }
 
   private deriveLoginMethod(
@@ -156,6 +167,10 @@ class SDKServer {
 
   private getSessionSecret() {
     const secret = ENV.cookieSecret;
+    if (!secret) {
+    console.error('❌ COOKIE_SECRET is not set in environment variables!');
+    throw new Error('COOKIE_SECRET is required');
+  }
     return new TextEncoder().encode(secret);
   }
 
@@ -168,10 +183,17 @@ class SDKServer {
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
+  console.log('🔐 createSessionToken called with:', { openId, options });
+  console.log('🔐 ENV.cookieSecret exists:', !!ENV.cookieSecret);
+  console.log('🔐 ENV.appId:', ENV.appId);
+  const appId = this.validateAppId();
+  if (!ENV.appId) {
+    throw new Error('APP_ID environment variable is required');
+  }
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        appId: appId,
         name: options.name || "",
       },
       options
@@ -182,12 +204,26 @@ class SDKServer {
     payload: SessionPayload,
     options: { expiresInMs?: number } = {}
   ): Promise<string> {
+    console.log('🔐 signSession called with payload:', payload);
+    if (!payload.openId || !payload.appId) {
+    throw new Error('openId and appId are required for session creation');
+  }
     const issuedAt = Date.now();
     const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
+    console.log('🔐 JWT expiration:', new Date(issuedAt + expiresInMs));
 
-    return new SignJWT({
+    // return new SignJWT({
+    //   openId: payload.openId,
+    //   appId: payload.appId,
+    //   name: payload.name,
+    // })
+    //   .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    //   .setExpirationTime(expirationSeconds)
+    //   .sign(secretKey);
+     try {
+    const token = await new SignJWT({
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
@@ -195,6 +231,13 @@ class SDKServer {
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
+    
+    console.log('✅ JWT token created successfully');
+    return token;
+  } catch (error) {
+    console.error('❌ JWT token creation failed:', error);
+    throw error;
+  }
   }
 
   async verifySession(
@@ -235,9 +278,10 @@ class SDKServer {
   async getUserInfoWithJwt(
     jwtToken: string
   ): Promise<GetUserInfoWithJwtResponse> {
+    const appId = this.validateAppId();
     const payload: GetUserInfoWithJwtRequest = {
       jwtToken,
-      projectId: ENV.appId,
+      projectId: appId,
     };
 
     const { data } = await this.client.post<GetUserInfoWithJwtResponse>(
@@ -257,21 +301,28 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
+    console.log('🔐 authenticateRequest called');
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
+    console.log('🍪 Session cookie found:', !!sessionCookie);
+    console.log('🍪 Cookie name:', COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
+    console.log('🔐 Session verification result:', session ? 'VALID' : 'INVALID');
 
-    if (!session) {
-      throw ForbiddenError("Invalid session cookie");
-    }
+   if (!session) {
+    console.log('❌ No valid session found');
+    throw ForbiddenError("Invalid session cookie");
+  }
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
+    console.log(' Looking for user with openId:', sessionUserId);
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
     if (!user) {
+       console.log('🔄 User not in DB, syncing from OAuth...');
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({
@@ -282,21 +333,23 @@ class SDKServer {
           lastSignedIn: signedInAt,
         });
         user = await db.getUserByOpenId(userInfo.openId);
+        console.log('✅ User synced from OAuth');
       } catch (error) {
         console.error("[Auth] Failed to sync user from OAuth:", error);
         throw ForbiddenError("Failed to sync user info");
       }
     }
 
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
+     if (!user) {
+    console.log('❌ User not found after sync attempt');
+    throw ForbiddenError("User not found");
+  }
 
     await db.upsertUser({
       openId: user.openId,
       lastSignedIn: signedInAt,
     });
-
+    console.log('✅ Authentication successful for user:', user.name);
     return user;
   }
 }
