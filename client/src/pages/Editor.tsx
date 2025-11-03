@@ -14,8 +14,14 @@ interface UserCursor {
   name: string;
 }
 
-export default function Editor() {
-  const { documentId } = useParams();
+interface EditorProps {
+  documentId?: string;
+}
+
+export default function Editor({ documentId: propDocId }: EditorProps) {
+  const params = useParams();
+  // Use prop documentId if provided, otherwise use from params
+  const documentId = propDocId || params.documentId;
   const docId = parseInt(documentId || "0");
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [cursorPositions, setCursorPositions] = useState<Map<string, UserCursor>>(new Map());

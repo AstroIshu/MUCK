@@ -8,9 +8,20 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 15, // 15 minutes
+    },
+  },
+});
 
+let isRedirecting = false;
 const redirectToLoginIfUnauthorized = (error: unknown) => {
+  if (isRedirecting) return; // Prevent multiple redirects
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
@@ -18,22 +29,31 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
+  isRedirecting = true;
+  // Clear query cache on unauthorized to prevent stale data
+  queryClient.clear();
   window.location.href = getLoginUrl();
+};
+
+// Debounce error handling
+let errorTimeout: NodeJS.Timeout;
+const handleError = (error: unknown) => {
+  clearTimeout(errorTimeout);
+  errorTimeout = setTimeout(() => {
+    redirectToLoginIfUnauthorized(error);
+    console.error("[API Error]", error);
+  }, 100);
 };
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
+    handleError(event.query.state.error);
   }
 });
 
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
-    const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
+    handleError(event.mutation.state.error);
   }
 });
 

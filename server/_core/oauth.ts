@@ -12,6 +12,12 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  // Logout endpoint
+  app.post("/api/oauth/logout", (req: Request, res: Response) => {
+    res.clearCookie(COOKIE_NAME, getSessionCookieOptions(req));
+    res.json({ success: true });
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

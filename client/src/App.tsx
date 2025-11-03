@@ -1,21 +1,54 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Documents from "./pages/Documents";
 import Editor from "./pages/Editor";
+import LandingPage from "./pages/landing";
+import { useAuth } from "./_core/hooks/useAuth";
+import DashboardLayout from "./components/DashboardLayout";
+import { ComponentType } from "react";
+
+// Protected route wrapper
+function ProtectedRoute({ component: Component }: { component: ComponentType }) {
+  const { isAuthenticated } = useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: "/"
+  });
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <DashboardLayout>
+      <Component />
+    </DashboardLayout>
+  );
+}
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
+  const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // Redirect authenticated users away from landing to home
+  if (isAuthenticated && window.location.pathname === "/") {
+    setLocation("/home");
+    return null;
+  }
+
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/documents"} component={Documents} />
-      <Route path={"/editor/:documentId"} component={Editor} />
-      <Route path={"/404"} component={NotFound} />
+      <Route path="/" component={LandingPage} />
+      <Route path="/home" component={() => <ProtectedRoute component={Home} />} />
+      <Route path="/documents" component={() => <ProtectedRoute component={Documents} />} />
+      <Route path="/editor/:documentId">
+        {(params) => <ProtectedRoute component={() => <Editor documentId={params.documentId} />} />}
+      </Route>
+      <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
@@ -31,7 +64,7 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider
-        defaultTheme="light"
+        defaultTheme="dark"
         // switchable
       >
         <TooltipProvider>
