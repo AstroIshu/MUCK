@@ -1,7 +1,14 @@
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
+import { useAuth } from '@/_core/hooks/useAuth';
+import { Navigate } from 'react-router-dom';
 
 export default function LandingPage() {
+    const { isAuthenticated, loading } = useAuth();
+
+    if (loading) return null;
+    if (isAuthenticated) return <Navigate to="/home" replace />;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background">
       <div className="text-center space-y-6">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import * as Y from 'yjs';
 import { useParams } from "wouter";
 import { useCollaborativeEditor } from "@/hooks/useCollaborativeEditor";
 import { trpc } from "@/lib/trpc";
@@ -117,6 +118,17 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
               <Users className="w-4 h-4" />
               <span className="text-sm font-medium">{remoteUsers.size + 1} online</span>
             </div>
+            <button
+              onClick={() => {
+                const url = window.location.href;
+                navigator.clipboard.writeText(url);
+                // You might want to show a toast notification here
+                // using your Toaster component
+              }}
+              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            >
+              Share Link
+            </button>
             <div className={`w-2 h-2 rounded-full ${statusColor}`} />
           </div>
         </div>
