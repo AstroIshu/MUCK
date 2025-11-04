@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, FileText, Clock, Trash2 } from "lucide-react";
+import { Loader2, Plus, FileText, Clock, Trash2, ArrowRight } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function Documents() {
   const [, setLocation] = useLocation();
@@ -166,48 +172,58 @@ export default function Documents() {
                     <span>{formatDate(doc.updatedAt)}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-4">
+                <div className="flex items-center justify-end gap-2 mt-4">
                   <Button
                     variant="outline"
-                    className="w-full"
+                    size="sm"
                     onClick={e => {
                       e.stopPropagation();
                       handleOpenDocument(doc.id);
                     }}
                   >
                     Open
+                    <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                   {doc.ownerId === user?.id && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setDocToDelete(doc.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent onClick={e => e.stopPropagation()}>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently
-                            delete your document.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleDeleteDocument}>
-                            Continue
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setDocToDelete(doc.id);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent onClick={e => e.stopPropagation()}>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently
+                                  delete your document.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteDocument}>
+                                  Continue
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Delete document</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+)}
                 </div>
               </Card>
             ))}

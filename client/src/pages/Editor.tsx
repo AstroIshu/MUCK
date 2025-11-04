@@ -53,28 +53,26 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
     doc?.characterCount ?? 0
   );
 
+  // Initialize collaborative editor
+  const { content, isConnected, updateContent, updateCursor, socket } =
+    useCollaborativeEditor({
+      documentId: docId,
+      onContentChange: (newContent: string) => {
+        const words = newContent.trim().split(/\s+/).filter(Boolean);
+        setWordCount(words.length);
+        setCharacterCount(newContent.length);
+      },
+      onCursorsChange: setCursorPositions,
+      onUsersChange: setRemoteUsers,
+    });
+
   // Update local counts when doc changes
   useEffect(() => {
     if (doc) {
       setWordCount(doc.wordCount);
       setCharacterCount(doc.characterCount);
     }
-  }, [doc?.wordCount, doc?.characterCount]);
-
-  // Initialize collaborative editor
-  const { content, isConnected, updateContent, updateCursor, socket } =
-    useCollaborativeEditor({
-      documentId: docId,
-      onContentChange: newContent => {
-        // Content change is handled by the controlled textarea value prop
-      },
-      onCursorsChange: cursors => {
-        setCursorPositions(cursors);
-      },
-      onUsersChange: users => {
-        setRemoteUsers(users);
-      },
-    });
+  }, [doc]);
 
   // Listen for count updates from websocket
   useEffect(() => {
@@ -102,8 +100,7 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
 
   // Handle local text changes
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    updateContent(newValue);
+    updateContent(e.target.value);
   };
 
   // Handle cursor movement
@@ -122,19 +119,7 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
     }
   };
 
-  // Sync editor content when it changes from remote (preserve cursor position)
-  useEffect(() => {
-    if (editorRef.current && editorRef.current.value !== content) {
-      const cursorPos = editorRef.current.selectionStart;
-      const oldLength = editorRef.current.value.length;
-      editorRef.current.value = content;
 
-      // Adjust cursor position if content changed
-      const newLength = content.length;
-      const adjustedCursorPos = Math.min(cursorPos, newLength);
-      editorRef.current.setSelectionRange(adjustedCursorPos, adjustedCursorPos);
-    }
-  }, [content]);
 
   if (docLoading) {
     return (
@@ -174,7 +159,7 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               <span className="text-sm font-medium">
-                {remoteUsers.size + 1} online
+                {remoteUsers.size } online
               </span>
             </div>
             <button

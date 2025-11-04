@@ -391,7 +391,8 @@ export async function deleteDocument(documentId: number, userId: number) {
   // Then, delete the document, ensuring the owner is correct
   const result = await db
     .delete(documents)
-    .where(eq(documents.id, documentId) && eq(documents.ownerId, userId));
+    .where(eq(documents.id, documentId) && eq(documents.ownerId, userId))
+    .limit(1);
 
   return result;
 }

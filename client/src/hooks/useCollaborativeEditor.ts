@@ -343,15 +343,27 @@ export function useCollaborativeEditor({
 
     ytext.observe(updateHandler);
 
+    const ydocUpdateHandler = (update: Uint8Array, origin: any) => {
+      if (origin === 'local' && socketRef.current?.connected) {
+        socketRef.current.emit("update", {
+          update: Array.from(update),
+          clientId: clientIdRef.current,
+        });
+      }
+    };
+
+    ydoc.on('update', ydocUpdateHandler);
+
     return () => {
       // Don't destroy during development Strict Mode remounts
       // Only destroy when truly unmounting
       if (isMountedRef.current) {
         ytext.unobserve(updateHandler);
+        ydoc.off('update', ydocUpdateHandler);
         // We'll let the final cleanup handle destruction
       }
     };
-  }, [onContentChange]);
+  }, []);
 
   // Initialize WebSocket connection with robust mount protection
   useEffect(() => {
@@ -539,54 +551,16 @@ export function useCollaborativeEditor({
   // ... (rest of your functions remain the same - updateContent, updateCursor, etc.)
   // Apply local changes to CRDT
   const updateContent = useCallback((newContent: string) => {
-    if (!ytextRef.current) return;
+    if (!ytextRef.current || !ydocRef.current) return;
 
     const ytext = ytextRef.current;
     const currentContent = ytext.toString();
 
-    if (currentContent === newContent) return;
-
-    // Find the first difference between old and new content
-    let startIndex = 0;
-    while (
-      startIndex < currentContent.length &&
-      startIndex < newContent.length &&
-      currentContent[startIndex] === newContent[startIndex]
-    ) {
-      startIndex++;
-    }
-
-    // Find the end of the difference
-    let endIndexOld = currentContent.length;
-    let endIndexNew = newContent.length;
-    while (
-      endIndexOld > startIndex &&
-      endIndexNew > startIndex &&
-      currentContent[endIndexOld - 1] === newContent[endIndexNew - 1]
-    ) {
-      endIndexOld--;
-      endIndexNew--;
-    }
-
-    // Calculate the length of text to delete and insert
-    const deleteLength = endIndexOld - startIndex;
-    const insertText = newContent.slice(startIndex, endIndexNew);
-
-    // Apply the changes
-    if (deleteLength > 0) {
-      ytext.delete(startIndex, deleteLength);
-    }
-    if (insertText.length > 0) {
-      ytext.insert(startIndex, insertText);
-    }
-
-    // Send update to server
-    if (socketRef.current && ydocRef.current && socketRef.current.connected) {
-      const update = Y.encodeStateAsUpdate(ydocRef.current);
-      socketRef.current.emit("update", {
-        update: Array.from(update),
-        clientId: clientIdRef.current,
-      });
+    if (currentContent !== newContent) {
+        ydocRef.current.transact(() => {
+            ytext.delete(0, ytext.length);
+            ytext.insert(0, newContent);
+        }, 'local');
     }
   }, []);
 
