@@ -1,4 +1,14 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, longtext, binary } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  json,
+  longtext,
+  binary,
+} from "drizzle-orm/mysql-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -131,17 +141,32 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   sessions: many(sessions),
 }));
 
-export const documentPermissionsRelations = relations(documentPermissions, ({ one }) => ({
-  document: one(documents, { fields: [documentPermissions.documentId], references: [documents.id] }),
-  user: one(users, { fields: [documentPermissions.userId], references: [users.id] }),
-}));
+export const documentPermissionsRelations = relations(
+  documentPermissions,
+  ({ one }) => ({
+    document: one(documents, {
+      fields: [documentPermissions.documentId],
+      references: [documents.id],
+    }),
+    user: one(users, {
+      fields: [documentPermissions.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 export const operationsRelations = relations(operations, ({ one }) => ({
-  document: one(documents, { fields: [operations.documentId], references: [documents.id] }),
+  document: one(documents, {
+    fields: [operations.documentId],
+    references: [documents.id],
+  }),
   user: one(users, { fields: [operations.userId], references: [users.id] }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
-  document: one(documents, { fields: [sessions.documentId], references: [documents.id] }),
+  document: one(documents, {
+    fields: [sessions.documentId],
+    references: [documents.id],
+  }),
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));

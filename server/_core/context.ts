@@ -11,14 +11,10 @@ export type TrpcContext = {
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
-  let user: User | null = null;
-
-  try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
-  }
+  // Use the user already set by Express middleware to avoid redundant authentication
+  // The Express middleware in server/_core/index.ts already calls authenticateRequest
+  // and sets req.user, so we don't need to authenticate again here
+  const user: User | null = opts.req.user ?? null;
 
   return {
     req: opts.req,

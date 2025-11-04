@@ -27,12 +27,12 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
 
-     if (!ENV.googleClientId || !ENV.googleClientSecret) {
+    if (!ENV.googleClientId || !ENV.googleClientSecret) {
       console.error("[OAuth] Google OAuth credentials not configured");
       res.status(500).json({ error: "OAuth configuration error" });
       return;
     }
-    
+
     try {
       // Exchange authorization code with Google's token endpoint
       const redirectUri = `${req.protocol}://${req.get("host")}/api/oauth/callback`;
@@ -54,14 +54,23 @@ export function registerOAuthRoutes(app: Express) {
       const { access_token: accessToken, id_token: idToken } = tokenResp.data;
 
       // Retrieve user info from Google's OpenID Connect userinfo endpoint
-      const userInfoResp = await axios.get("https://openidconnect.googleapis.com/v1/userinfo", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const userInfoResp = await axios.get(
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
 
-      const userInfo = userInfoResp.data as { sub?: string; name?: string; email?: string };
+      const userInfo = userInfoResp.data as {
+        sub?: string;
+        name?: string;
+        email?: string;
+      };
 
       if (!userInfo.sub) {
-        res.status(400).json({ error: "openId (sub) missing from Google user info" });
+        res
+          .status(400)
+          .json({ error: "openId (sub) missing from Google user info" });
         return;
       }
 
@@ -77,7 +86,10 @@ export function registerOAuthRoutes(app: Express) {
           lastSignedIn: new Date(),
         });
       } catch (dbErr) {
-        console.warn("[OAuth] Warning: failed to upsert user to DB, continuing without persistence", dbErr);
+        console.warn(
+          "[OAuth] Warning: failed to upsert user to DB, continuing without persistence",
+          dbErr
+        );
       }
 
       const sessionToken = await sdk.createSessionToken(openId, {
@@ -86,7 +98,10 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       res.redirect(302, "/");
     } catch (error) {

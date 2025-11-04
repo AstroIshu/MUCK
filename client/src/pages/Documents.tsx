@@ -3,29 +3,61 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, FileText, Clock } from "lucide-react";
+import { Loader2, Plus, FileText, Clock, Trash2 } from "lucide-react";
 
 export default function Documents() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const [newDocName, setNewDocName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<number | null>(null);
 
   // Fetch user's documents
-  const { data: documents, isLoading, refetch } = trpc.documents.list.useQuery();
+  const {
+    data: documents,
+    isLoading,
+    refetch,
+  } = trpc.documents.list.useQuery();
+
+  // Delete document
+  const deleteMutation = trpc.documents.delete.useMutation({
+    onSuccess: () => {
+      refetch();
+    },
+    onError: error => {
+      console.error("Failed to delete document:", error);
+    },
+  });
+
+  const handleDeleteDocument = () => {
+    if (docToDelete) {
+      deleteMutation.mutate({ documentId: docToDelete });
+    }
+  };
 
   // Create new document
   const createMutation = trpc.documents.create.useMutation({
-    onSuccess: (result) => {
+    onSuccess: result => {
       setNewDocName("");
       setIsCreating(false);
       refetch();
       // Navigate to the new document
       setLocation(`/editor/${result.documentId}`);
     },
-    onError: (error) => {
+    onError: error => {
       console.error("Failed to create document:", error);
       setIsCreating(false);
     },
@@ -73,8 +105,8 @@ export default function Documents() {
             <Input
               placeholder="Document name..."
               value={newDocName}
-              onChange={(e) => setNewDocName(e.target.value)}
-              onKeyPress={(e) => {
+              onChange={e => setNewDocName(e.target.value)}
+              onKeyPress={e => {
                 if (e.key === "Enter") {
                   handleCreateDocument();
                 }
@@ -108,7 +140,7 @@ export default function Documents() {
           </div>
         ) : documents && documents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {documents.map((doc) => (
+            {documents.map(doc => (
               <Card
                 key={doc.id}
                 className="p-4 hover:shadow-lg transition-shadow cursor-pointer"
@@ -120,9 +152,9 @@ export default function Documents() {
                     {doc.ownerId === user?.id ? "Owner" : "Shared"}
                   </span>
                 </div>
-
-                <h3 className="font-semibold text-lg mb-2 line-clamp-2">{doc.name}</h3>
-
+                <h3 className="font-semibold text-lg mb-2 line-clamp-2">
+                  {doc.name}
+                </h3>
                 <div className="space-y-1 text-sm text-muted-foreground mb-4">
                   <div className="flex items-center gap-2">
                     <span>{doc.wordCount} words</span>
@@ -134,17 +166,49 @@ export default function Documents() {
                     <span>{formatDate(doc.updatedAt)}</span>
                   </div>
                 </div>
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOpenDocument(doc.id);
-                  }}
-                >
-                  Open
-                </Button>
+                <div className="flex items-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleOpenDocument(doc.id);
+                    }}
+                  >
+                    Open
+                  </Button>
+                  {doc.ownerId === user?.id && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setDocToDelete(doc.id);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent onClick={e => e.stopPropagation()}>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently
+                            delete your document.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDeleteDocument}>
+                            Continue
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
               </Card>
             ))}
           </div>

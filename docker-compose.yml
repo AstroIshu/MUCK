@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: muck
     ports:
-      - "3307:3306"  # Using port 3307 externally, 3306 internally
+      - "3307:3306" # Using port 3307 externally, 3306 internally
     volumes:
       - mysql_data:/var/lib/mysql
 

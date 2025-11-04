@@ -10,6 +10,8 @@ import {
   getDocument,
   getOperationsSince,
   updateSessionCursor,
+  updateDocumentCounts,
+  updateDocumentSnapshot,
 } from "./db";
 import { getUserByOpenId } from "./db";
 
@@ -55,8 +57,13 @@ interface DocumentRoom {
   users: Map<string, UserSession>;
   lamportTime: number;
   vectorClocks: Map<string, number>;
-  operationBuffer: Array<{ update: Uint8Array; clientId: string; timestamp: number }>;
+  operationBuffer: Array<{
+    update: Uint8Array;
+    clientId: string;
+    timestamp: number;
+  }>;
   lastSnapshot: { version: number; timestamp: number };
+  countUpdateTimeout?: NodeJS.Timeout;
 }
 
 const COLORS = [
@@ -101,7 +108,9 @@ export function setupWebSocket(httpServer: HTTPServer) {
   const rooms = new Map<number, DocumentRoom>();
 
   // Helper to get or create document room
-  async function getOrCreateRoom(documentId: number): Promise<DocumentRoom | null> {
+  async function getOrCreateRoom(
+    documentId: number
+  ): Promise<DocumentRoom | null> {
     if (rooms.has(documentId)) {
       return rooms.get(documentId)!;
     }
@@ -112,14 +121,24 @@ export function setupWebSocket(httpServer: HTTPServer) {
     const ydoc = new Y.Doc();
     const ytext = ydoc.getText("shared-text");
 
-    // Load snapshot if exists
+    // Load snapshot if exists, otherwise load from content field
     if (doc.snapshotState) {
       try {
         const state = Buffer.from(doc.snapshotState, "base64");
         Y.applyUpdate(ydoc, new Uint8Array(state));
       } catch (error) {
-        console.error(`[CRDT] Failed to load snapshot for document ${documentId}:`, error);
+        console.error(
+          `[CRDT] Failed to load snapshot for document ${documentId}:`,
+          error
+        );
+        // Fallback to content field if snapshot fails
+        if (doc.content) {
+          ytext.insert(0, doc.content);
+        }
       }
+    } else if (doc.content) {
+      // If no snapshot exists, load from content field
+      ytext.insert(0, doc.content);
     }
 
     const room: DocumentRoom = {
@@ -129,10 +148,25 @@ export function setupWebSocket(httpServer: HTTPServer) {
       lamportTime: 0,
       vectorClocks: new Map(),
       operationBuffer: [],
-      lastSnapshot: { version: doc.snapshotVersion || 0, timestamp: Date.now() },
+      lastSnapshot: {
+        version: doc.snapshotVersion || 0,
+        timestamp: Date.now(),
+      },
     };
 
     rooms.set(documentId, room);
+
+    // Update counts if document has initial content
+    const initialContent = ytext.toString();
+    if (initialContent) {
+      updateDocumentCounts(documentId, initialContent).catch(error => {
+        console.error(
+          `[WebSocket] Failed to update initial counts for document ${documentId}:`,
+          error
+        );
+      });
+    }
+
     return room;
   }
 
@@ -166,23 +200,88 @@ export function setupWebSocket(httpServer: HTTPServer) {
     }
   }
 
+  // Helper to update document counts (debounced)
+  async function updateCounts(
+    documentId: number,
+    room: DocumentRoom,
+    userId?: number
+  ) {
+    try {
+      const content = room.text.toString();
+
+      // Clear existing timeout
+      if (room.countUpdateTimeout) {
+        clearTimeout(room.countUpdateTimeout);
+      }
+
+      // Debounce count updates (wait 500ms after last update)
+      room.countUpdateTimeout = setTimeout(async () => {
+        try {
+          await updateDocumentCounts(documentId, content, userId);
+
+          // Calculate counts to broadcast
+          const wordCount = content
+            .trim()
+            .split(/\s+/)
+            .filter(w => w.length > 0).length;
+          const characterCount = content.length;
+
+          // Broadcast count update to all clients in the room
+          io.to(`doc:${documentId}`).emit("counts_updated", {
+            documentId,
+            wordCount,
+            characterCount,
+          });
+
+          delete room.countUpdateTimeout;
+        } catch (error) {
+          console.error(
+            `[WebSocket] Failed to update counts for document ${documentId}:`,
+            error
+          );
+          delete room.countUpdateTimeout;
+        }
+      }, 500);
+    } catch (error) {
+      console.error(
+        `[WebSocket] Failed to update counts for document ${documentId}:`,
+        error
+      );
+    }
+  }
+
   // Helper to persist snapshot
-  async function persistSnapshot(documentId: number, room: DocumentRoom) {
+  async function persistSnapshot(
+    documentId: number,
+    room: DocumentRoom,
+    userId?: number
+  ) {
     try {
       const state = Y.encodeStateAsUpdate(room.doc);
       const stateBase64 = Buffer.from(state).toString("base64");
+      const content = room.text.toString();
+      const newVersion = room.lastSnapshot.version + 1;
 
-      // Update document snapshot in database
-      const db = await import("./db").then((m) => m.getDb());
-      if (db) {
-        // Note: This would need a proper update function in db.ts
-        console.log(`[CRDT] Snapshot persisted for document ${documentId}`);
-      }
+      // Update document snapshot, content, and counts in database
+      await updateDocumentSnapshot(
+        documentId,
+        stateBase64,
+        newVersion,
+        content,
+        userId
+      );
+
+      console.log(
+        `[CRDT] Snapshot persisted for document ${documentId} (version ${newVersion})`
+      );
 
       room.operationBuffer = [];
-      room.lastSnapshot = { version: room.lastSnapshot.version + 1, timestamp: Date.now() };
+      room.lastSnapshot = { version: newVersion, timestamp: Date.now() };
     } catch (error) {
-      console.error(`[CRDT] Failed to persist snapshot for document ${documentId}:`, error);
+      console.error(
+        `[CRDT] Failed to persist snapshot for document ${documentId}:`,
+        error
+      );
     }
   }
 
@@ -194,24 +293,50 @@ export function setupWebSocket(httpServer: HTTPServer) {
       try {
         const { documentId, clientId, token } = message;
 
-        // Validate JWT token
-        const payload = parseJWT(token);
+        // Try to get session cookie from socket handshake headers
+        // Since httpOnly cookies can't be read from JavaScript, we need to read them from the request
+        const cookieHeader = socket.handshake.headers.cookie || "";
+        const cookieName = "app_session_id"; // From shared/const.ts
+
+        // Parse cookies from header
+        const cookies = new Map<string, string>();
+        cookieHeader.split(";").forEach(cookie => {
+          const [name, ...valueParts] = cookie.trim().split("=");
+          if (name && valueParts.length > 0) {
+            cookies.set(name, valueParts.join("="));
+          }
+        });
+
+        // Get session token from cookie or from message token
+        const sessionToken = cookies.get(cookieName) || token;
+
+        // Validate JWT token - try session cookie first, then message token
+        const payload = parseJWT(sessionToken);
         if (!payload) {
-          socket.emit("error", { message: "Invalid token", code: "AUTH_FAILED" });
+          socket.emit("error", {
+            message: "Invalid token",
+            code: "AUTH_FAILED",
+          });
           return;
         }
 
         // Get user from database
         const user = await getUserByOpenId(payload.openId);
         if (!user) {
-          socket.emit("error", { message: "User not found", code: "USER_NOT_FOUND" });
+          socket.emit("error", {
+            message: "User not found",
+            code: "USER_NOT_FOUND",
+          });
           return;
         }
 
         // Get or create room (also validates document exists)
         const room = await getOrCreateRoom(documentId);
         if (!room) {
-          socket.emit("error", { message: "Document not found", code: "NOT_FOUND" });
+          socket.emit("error", {
+            message: "Document not found",
+            code: "NOT_FOUND",
+          });
           return;
         }
 
@@ -220,7 +345,10 @@ export function setupWebSocket(httpServer: HTTPServer) {
         if (doc && doc.ownerId !== user.id) {
           const access = await checkDocumentAccess(documentId, user.id);
           if (!access) {
-            socket.emit("error", { message: "Access denied", code: "ACCESS_DENIED" });
+            socket.emit("error", {
+              message: "Access denied",
+              code: "ACCESS_DENIED",
+            });
             return;
           }
         }
@@ -249,7 +377,7 @@ export function setupWebSocket(httpServer: HTTPServer) {
         socket.emit("room_joined", {
           documentId,
           clientId,
-          users: Array.from(room.users.values()).map((u) => ({
+          users: Array.from(room.users.values()).map(u => ({
             clientId: u.clientId,
             userId: u.userId,
             color: u.color,
@@ -266,10 +394,15 @@ export function setupWebSocket(httpServer: HTTPServer) {
           color,
         });
 
-        console.log(`[WebSocket] User ${user.id} joined document ${documentId} with client ${clientId}`);
+        console.log(
+          `[WebSocket] User ${user.id} joined document ${documentId} with client ${clientId}`
+        );
       } catch (error) {
         console.error("[WebSocket] Error joining room:", error);
-        socket.emit("error", { message: "Internal server error", code: "SERVER_ERROR" });
+        socket.emit("error", {
+          message: "Internal server error",
+          code: "SERVER_ERROR",
+        });
       }
     });
 
@@ -312,7 +445,10 @@ export function setupWebSocket(httpServer: HTTPServer) {
 
         // Increment Lamport clock
         room.lamportTime++;
-        room.vectorClocks.set(message.clientId, (room.vectorClocks.get(message.clientId) || 0) + 1);
+        room.vectorClocks.set(
+          message.clientId,
+          (room.vectorClocks.get(message.clientId) || 0) + 1
+        );
 
         // Persist operation
         await addOperation(
@@ -325,13 +461,46 @@ export function setupWebSocket(httpServer: HTTPServer) {
           room.lastSnapshot.version + room.operationBuffer.length
         );
 
-        // Broadcast to other clients
-        broadcastUpdate(currentSession.documentId, update, message.clientId, room.lamportTime);
+        // Update word and character counts (debounced)
+        updateCounts(currentSession.documentId, room, currentSession.userId);
 
-        console.log(`[CRDT] Update applied for document ${currentSession.documentId}`);
+        // Save content more frequently (every 10 operations or on first operation) to ensure it's persisted
+        if (
+          room.operationBuffer.length % 10 === 0 ||
+          room.operationBuffer.length === 1
+        ) {
+          const content = room.text.toString();
+          updateDocumentCounts(
+            currentSession.documentId,
+            content,
+            currentSession.userId
+          ).catch(error => {
+            if (currentSession) {
+              console.error(
+                `[WebSocket] Failed to save content for document ${currentSession.documentId}:`,
+                error
+              );
+            }
+          });
+        }
+
+        // Broadcast to other clients
+        broadcastUpdate(
+          currentSession.documentId,
+          update,
+          message.clientId,
+          room.lamportTime
+        );
+
+        console.log(
+          `[CRDT] Update applied for document ${currentSession.documentId}`
+        );
       } catch (error) {
         console.error("[WebSocket] Error processing update:", error);
-        socket.emit("error", { message: "Failed to process update", code: "UPDATE_FAILED" });
+        socket.emit("error", {
+          message: "Failed to process update",
+          code: "UPDATE_FAILED",
+        });
       }
     });
 
@@ -386,7 +555,42 @@ export function setupWebSocket(httpServer: HTTPServer) {
 
             // Clean up empty rooms
             if (room.users.size === 0) {
-              persistSnapshot(currentSession.documentId, room);
+              // Clear any pending count updates and execute immediately
+              if (room.countUpdateTimeout) {
+                clearTimeout(room.countUpdateTimeout);
+                delete room.countUpdateTimeout;
+              }
+              // Save everything one final time before cleanup (synchronously to ensure persistence)
+              const content = room.text.toString();
+              try {
+                // Save snapshot with content and counts
+                await persistSnapshot(
+                  currentSession.documentId,
+                  room,
+                  currentSession.userId
+                );
+                console.log(
+                  `[WebSocket] Final snapshot saved for document ${currentSession.documentId} before cleanup`
+                );
+              } catch (error) {
+                console.error(
+                  `[WebSocket] Failed to save final snapshot for document ${currentSession.documentId}:`,
+                  error
+                );
+                // Fallback: at least save content and counts
+                try {
+                  await updateDocumentCounts(
+                    currentSession.documentId,
+                    content,
+                    currentSession.userId
+                  );
+                } catch (countError) {
+                  console.error(
+                    `[WebSocket] Failed to update counts on disconnect for document ${currentSession.documentId}:`,
+                    countError
+                  );
+                }
+              }
               rooms.delete(currentSession.documentId);
             }
           }

@@ -1,7 +1,15 @@
 import { eq, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, documents, documentPermissions, operations, sessions, offlineQueue } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  InsertUser,
+  users,
+  documents,
+  documentPermissions,
+  operations,
+  sessions,
+  offlineQueue,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -56,8 +64,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -84,7 +92,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -136,7 +148,7 @@ export async function checkDocumentAccess(documentId: number, userId: number) {
     .from(documentPermissions)
     .where(
       eq(documentPermissions.documentId, documentId) &&
-      eq(documentPermissions.userId, userId)
+        eq(documentPermissions.userId, userId)
     )
     .limit(1);
 
@@ -188,8 +200,7 @@ export async function getOperationsSince(documentId: number, version: number) {
     .select()
     .from(operations)
     .where(
-      eq(operations.documentId, documentId) &&
-      gt(operations.version, version)
+      eq(operations.documentId, documentId) && gt(operations.version, version)
     )
     .orderBy(operations.version);
 
@@ -281,7 +292,7 @@ export async function getOfflineQueue(clientId: string, documentId: number) {
     .from(offlineQueue)
     .where(
       eq(offlineQueue.clientId, clientId) &&
-      eq(offlineQueue.documentId, documentId)
+        eq(offlineQueue.documentId, documentId)
     )
     .orderBy(offlineQueue.sequenceNumber);
 
@@ -296,8 +307,93 @@ export async function clearOfflineQueue(clientId: string, documentId: number) {
     .delete(offlineQueue)
     .where(
       eq(offlineQueue.clientId, clientId) &&
-      eq(offlineQueue.documentId, documentId)
+        eq(offlineQueue.documentId, documentId)
     );
+}
+
+// Helper function to calculate word count
+function calculateWordCount(text: string): number {
+  if (!text || !text.trim()) return 0;
+  // Split by whitespace and filter out empty strings
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(word => word.length > 0).length;
+}
+
+// Helper function to calculate character count
+function calculateCharacterCount(text: string): number {
+  if (!text) return 0;
+  return text.length;
+}
+
+// Update document word and character counts
+export async function updateDocumentCounts(
+  documentId: number,
+  content: string,
+  userId?: number
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const wordCount = calculateWordCount(content);
+  const characterCount = calculateCharacterCount(content);
+
+  await db
+    .update(documents)
+    .set({
+      wordCount,
+      characterCount,
+      content,
+      lastEditedBy: userId || undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(documents.id, documentId));
+}
+
+// Update document snapshot state
+export async function updateDocumentSnapshot(
+  documentId: number,
+  snapshotState: string,
+  snapshotVersion: number,
+  content: string,
+  userId?: number
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const wordCount = calculateWordCount(content);
+  const characterCount = calculateCharacterCount(content);
+
+  await db
+    .update(documents)
+    .set({
+      snapshotState,
+      snapshotVersion,
+      content,
+      wordCount,
+      characterCount,
+      lastEditedBy: userId || undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(documents.id, documentId));
+}
+
+export async function deleteDocument(documentId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // First, delete associated permissions
+  await db
+    .delete(documentPermissions)
+    .where(eq(documentPermissions.documentId, documentId));
+
+  // Then, delete the document, ensuring the owner is correct
+  const result = await db
+    .delete(documents)
+    .where(eq(documents.id, documentId) && eq(documents.ownerId, userId));
+
+  return result;
 }
 
 // TODO: Add additional queries as features grow

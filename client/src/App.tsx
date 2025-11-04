@@ -13,10 +13,14 @@ import DashboardLayout from "./components/DashboardLayout";
 import { ComponentType } from "react";
 
 // Protected route wrapper
-function ProtectedRoute({ component: Component }: { component: ComponentType }) {
+function ProtectedRoute({
+  component: Component,
+}: {
+  component: ComponentType;
+}) {
   const { isAuthenticated } = useAuth({
     redirectOnUnauthenticated: true,
-    redirectPath: "/"
+    redirectPath: "/",
   });
 
   if (!isAuthenticated) {
@@ -43,10 +47,20 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
-      <Route path="/home" component={() => <ProtectedRoute component={Home} />} />
-      <Route path="/documents" component={() => <ProtectedRoute component={Documents} />} />
+      <Route
+        path="/home"
+        component={() => <ProtectedRoute component={Home} />}
+      />
+      <Route
+        path="/documents"
+        component={() => <ProtectedRoute component={Documents} />}
+      />
       <Route path="/editor/:documentId">
-        {(params) => <ProtectedRoute component={() => <Editor documentId={params.documentId} />} />}
+        {params => (
+          <ProtectedRoute
+            component={() => <Editor documentId={params.documentId} />}
+          />
+        )}
       </Route>
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}

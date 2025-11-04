@@ -8,6 +8,7 @@ import {
   getDocumentPermissions,
   addOperation,
   getOperationsSince,
+  deleteDocument,
 } from "../db";
 import { TRPCError } from "@trpc/server";
 
@@ -52,7 +53,10 @@ export const documentsRouter = router({
 
         // Check access - owner always has access
         if (doc.ownerId !== ctx.user.id) {
-          const access = await checkDocumentAccess(input.documentId, ctx.user.id);
+          const access = await checkDocumentAccess(
+            input.documentId,
+            ctx.user.id
+          );
           if (!access) throw new TRPCError({ code: "FORBIDDEN" });
         }
 
@@ -82,7 +86,7 @@ export const documentsRouter = router({
 
     try {
       const docs = await getUserDocuments(ctx.user.id);
-      return docs.map((doc) => ({
+      return docs.map(doc => ({
         id: doc.id,
         name: doc.name,
         ownerId: doc.ownerId,
@@ -116,7 +120,7 @@ export const documentsRouter = router({
         }
 
         const permissions = await getDocumentPermissions(input.documentId);
-        return permissions.map((p) => ({
+        return permissions.map(p => ({
           userId: p.userId,
           role: p.role,
           grantedAt: p.grantedAt,
@@ -146,14 +150,20 @@ export const documentsRouter = router({
         // Check access - owner always has access
         const doc = await getDocument(input.documentId);
         if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
-        
+
         if (doc.ownerId !== ctx.user.id) {
-          const access = await checkDocumentAccess(input.documentId, ctx.user.id);
+          const access = await checkDocumentAccess(
+            input.documentId,
+            ctx.user.id
+          );
           if (!access) throw new TRPCError({ code: "FORBIDDEN" });
         }
 
-        const operations = await getOperationsSince(input.documentId, input.fromVersion);
-        return operations.map((op) => ({
+        const operations = await getOperationsSince(
+          input.documentId,
+          input.fromVersion
+        );
+        return operations.map(op => ({
           id: op.id,
           clientId: op.clientId,
           userId: op.userId,
@@ -169,6 +179,37 @@ export const documentsRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to get operations",
+        });
+      }
+    }),
+
+  // Delete a document
+  delete: protectedProcedure
+    .input(
+      z.object({
+        documentId: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+
+      try {
+        const doc = await getDocument(input.documentId);
+        if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+
+        // Only owner can delete
+        if (doc.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        await deleteDocument(input.documentId, ctx.user.id);
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error("[Documents] Failed to delete document:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete document",
         });
       }
     }),

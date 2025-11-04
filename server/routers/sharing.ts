@@ -89,7 +89,7 @@ export const sharingRouter = router({
 
     try {
       const permissions = await getDocumentPermissions(0); // TODO: Query by userId
-      return permissions.map((p) => ({
+      return permissions.map(p => ({
         documentId: p.documentId,
         role: p.role,
         grantedAt: p.grantedAt,

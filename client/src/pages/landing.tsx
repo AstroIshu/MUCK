@@ -1,13 +1,13 @@
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
-import { useAuth } from '@/_core/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Navigate } from "react-router-dom";
 
 export default function LandingPage() {
-    const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
 
-    if (loading) return null;
-    if (isAuthenticated) return <Navigate to="/home" replace />;
+  if (loading) return null;
+  if (isAuthenticated) return <Navigate to="/home" replace />;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background">
@@ -20,7 +20,7 @@ export default function LandingPage() {
         </p>
         <Button
           size="lg"
-          onClick={() => window.location.href = getLoginUrl()}
+          onClick={() => (window.location.href = getLoginUrl())}
           className="px-8"
         >
           Sign in with Google

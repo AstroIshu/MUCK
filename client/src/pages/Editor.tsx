@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import * as Y from 'yjs';
+import * as Y from "yjs";
 import { useParams } from "wouter";
 import { useCollaborativeEditor } from "@/hooks/useCollaborativeEditor";
 import { trpc } from "@/lib/trpc";
@@ -25,34 +25,85 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
   const documentId = propDocId || params.documentId;
   const docId = parseInt(documentId || "0");
   const editorRef = useRef<HTMLTextAreaElement>(null);
-  const [cursorPositions, setCursorPositions] = useState<Map<string, UserCursor>>(new Map());
-  const [remoteUsers, setRemoteUsers] = useState<Map<string, UserCursor>>(new Map());
-
-  // Fetch document metadata
-  const { data: doc, isLoading: docLoading } = trpc.documents.get.useQuery(
-    { documentId: docId },
-    { enabled: docId > 0 }
+  const [cursorPositions, setCursorPositions] = useState<
+    Map<string, UserCursor>
+  >(new Map());
+  const [remoteUsers, setRemoteUsers] = useState<Map<string, UserCursor>>(
+    new Map()
   );
 
+  // Fetch document metadata with refetch disabled to prevent reset on refresh
+  const {
+    data: doc,
+    isLoading: docLoading,
+    refetch: refetchDoc,
+  } = trpc.documents.get.useQuery(
+    { documentId: docId },
+    {
+      enabled: docId > 0,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false,
+    }
+  );
+
+  // Local state for counts to update immediately
+  const [wordCount, setWordCount] = useState(doc?.wordCount ?? 0);
+  const [characterCount, setCharacterCount] = useState(
+    doc?.characterCount ?? 0
+  );
+
+  // Update local counts when doc changes
+  useEffect(() => {
+    if (doc) {
+      setWordCount(doc.wordCount);
+      setCharacterCount(doc.characterCount);
+    }
+  }, [doc?.wordCount, doc?.characterCount]);
+
   // Initialize collaborative editor
-  const { content, isConnected, updateContent, updateCursor } = useCollaborativeEditor({
-    documentId: docId,
-    onContentChange: (newContent) => {
-      if (editorRef.current) {
-        editorRef.current.value = newContent;
+  const { content, isConnected, updateContent, updateCursor, socket } =
+    useCollaborativeEditor({
+      documentId: docId,
+      onContentChange: newContent => {
+        // Content change is handled by the controlled textarea value prop
+      },
+      onCursorsChange: cursors => {
+        setCursorPositions(cursors);
+      },
+      onUsersChange: users => {
+        setRemoteUsers(users);
+      },
+    });
+
+  // Listen for count updates from websocket
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCountsUpdate = (data: {
+      documentId: number;
+      wordCount: number;
+      characterCount: number;
+    }) => {
+      if (data.documentId === docId) {
+        setWordCount(data.wordCount);
+        setCharacterCount(data.characterCount);
+        // Optionally refetch to ensure database is in sync
+        refetchDoc();
       }
-    },
-    onCursorsChange: (cursors) => {
-      setCursorPositions(cursors);
-    },
-    onUsersChange: (users) => {
-      setRemoteUsers(users);
-    },
-  });
+    };
+
+    socket.on("counts_updated", handleCountsUpdate);
+
+    return () => {
+      socket.off("counts_updated", handleCountsUpdate);
+    };
+  }, [socket, docId, refetchDoc]);
 
   // Handle local text changes
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    updateContent(e.target.value);
+    const newValue = e.target.value;
+    updateContent(newValue);
   };
 
   // Handle cursor movement
@@ -64,18 +115,24 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
 
       updateCursor(
         position,
-        selectionStart !== selectionEnd ? [selectionStart, selectionEnd] : undefined
+        selectionStart !== selectionEnd
+          ? [selectionStart, selectionEnd]
+          : undefined
       );
     }
   };
 
-  // Sync editor content
+  // Sync editor content when it changes from remote (preserve cursor position)
   useEffect(() => {
     if (editorRef.current && editorRef.current.value !== content) {
       const cursorPos = editorRef.current.selectionStart;
+      const oldLength = editorRef.current.value.length;
       editorRef.current.value = content;
-      // Restore cursor position
-      editorRef.current.setSelectionRange(cursorPos, cursorPos);
+
+      // Adjust cursor position if content changed
+      const newLength = content.length;
+      const adjustedCursorPos = Math.min(cursorPos, newLength);
+      editorRef.current.setSelectionRange(adjustedCursorPos, adjustedCursorPos);
     }
   }, [content]);
 
@@ -110,13 +167,15 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
           <div>
             <h1 className="text-2xl font-bold">{doc.name}</h1>
             <p className="text-sm text-muted-foreground">
-              {doc.wordCount} words • {doc.characterCount} characters
+              {wordCount} words • {characterCount} characters
             </p>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              <span className="text-sm font-medium">{remoteUsers.size + 1} online</span>
+              <span className="text-sm font-medium">
+                {remoteUsers.size + 1} online
+              </span>
             </div>
             <button
               onClick={() => {
@@ -141,10 +200,11 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
           <Card className="flex-1 overflow-hidden">
             <textarea
               ref={editorRef}
-              value={content}
+              value={content || ""}
               onChange={handleTextChange}
               onKeyUp={handleCursorMove}
               onClick={handleCursorMove}
+              onSelect={handleCursorMove}
               placeholder="Start typing to edit the document..."
               className="w-full h-full p-4 resize-none focus:outline-none font-mono text-sm bg-background text-foreground"
             />
@@ -156,7 +216,7 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
           <Card className="p-4">
             <h2 className="font-semibold mb-4">Active Users</h2>
             <div className="space-y-2">
-              {Array.from(remoteUsers.values()).map((user) => (
+              {Array.from(remoteUsers.values()).map(user => (
                 <div key={user.clientId} className="flex items-center gap-2">
                   <div
                     className="w-3 h-3 rounded-full"
@@ -173,7 +233,7 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
             <Card className="p-4">
               <h2 className="font-semibold mb-4">Cursors</h2>
               <div className="space-y-2">
-                {Array.from(cursorPositions.values()).map((cursor) => (
+                {Array.from(cursorPositions.values()).map(cursor => (
                   <div key={cursor.clientId} className="text-xs">
                     <div className="flex items-center gap-2">
                       <div

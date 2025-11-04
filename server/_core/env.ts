@@ -1,14 +1,17 @@
-import { config } from 'dotenv';
+import { config } from "dotenv";
 
 // adding a debugging log to verify env loading
-console.log('=== Loading Environment Variables ===');
-console.log('Loading .env.local...');
-config({ path: '.env.local' });
-console.log('Loading .env...');
-config({ path: '.env' });
+console.log("=== Loading Environment Variables ===");
+console.log("Loading .env.local...");
+config({ path: ".env.local" });
+console.log("Loading .env...");
+config({ path: ".env" });
 
-console.log('APP_ID from process.env:', process.env.APP_ID);
-console.log('COOKIE_SECRET from process.env:', process.env.COOKIE_SECRET ? 'SET' : 'NOT SET');
+console.log("APP_ID from process.env:", process.env.APP_ID);
+console.log(
+  "COOKIE_SECRET from process.env:",
+  process.env.COOKIE_SECRET ? "SET" : "NOT SET"
+);
 
 export const ENV = {
   appId: process.env.APP_ID,
@@ -30,7 +33,9 @@ export const ENV = {
 if (ENV.isProduction) {
   // In production, fail fast for missing critical secrets
   if (!ENV.cookieSecret || ENV.cookieSecret.length === 0) {
-    throw new Error("Missing required environment variable: JWT_SECRET (used to sign session cookies)");
+    throw new Error(
+      "Missing required environment variable: JWT_SECRET (used to sign session cookies)"
+    );
   }
   if (!ENV.googleClientId || !ENV.googleClientSecret) {
     throw new Error(

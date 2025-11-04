@@ -1,7 +1,7 @@
 // Add this at the top of server/_core/index.ts
-import './env';
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+import "./env";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 import path from "path";
 import { fileURLToPath } from "url";
 // Load local env first (if present), then fallback to .env
@@ -65,7 +65,10 @@ async function startServer() {
       next();
     } catch (error: any) {
       // User is not authenticated - error.message available if error is Error-like
-      console.log('🛑 User not authenticated:', error?.message || String(error));
+      console.log(
+        "🛑 User not authenticated:",
+        error?.message || String(error)
+      );
       next();
     }
   });

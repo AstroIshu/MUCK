@@ -35,9 +35,8 @@ export function getSessionCookieOptions(req: Request) {
   return {
     secure: false, // Force to false for HTTP development
     httpOnly: true,
-    sameSite: 'lax' as const,
-    path: '/',
-    domain: 'localhost'
+    sameSite: "lax" as const,
+    path: "/",
+    domain: "localhost",
   };
 }
-

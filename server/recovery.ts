@@ -1,9 +1,5 @@
 import * as Y from "yjs";
-import {
-  addOfflineOperation,
-  getOfflineQueue,
-  clearOfflineQueue,
-} from "./db";
+import { addOfflineOperation, getOfflineQueue, clearOfflineQueue } from "./db";
 
 /**
  * Offline Recovery Manager
@@ -17,7 +13,12 @@ export class OfflineRecoveryManager {
     sequenceNumber: number
   ): Promise<void> {
     const updateBase64 = Buffer.from(update).toString("base64");
-    await addOfflineOperation(clientId, documentId, updateBase64, sequenceNumber);
+    await addOfflineOperation(
+      clientId,
+      documentId,
+      updateBase64,
+      sequenceNumber
+    );
   }
 
   static async recoverOfflineOperations(
@@ -46,7 +47,9 @@ export class OfflineRecoveryManager {
       }
 
       await clearOfflineQueue(clientId, documentId);
-      console.log(`[Recovery] Recovered ${recovered} ops, ${conflicts} conflicts`);
+      console.log(
+        `[Recovery] Recovered ${recovered} ops, ${conflicts} conflicts`
+      );
       return { recovered, conflicts };
     } catch (error) {
       console.error("[Recovery] Failed:", error);

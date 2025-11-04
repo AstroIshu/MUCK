@@ -6,7 +6,6 @@
 
 ---
 
-
 This application is built with cutting-edge technologies:
 
 **Frontend:** React 19 + TypeScript + Tailwind CSS 4 with shadcn/ui components for a modern, responsive interface

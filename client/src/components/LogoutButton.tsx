@@ -17,11 +17,7 @@ export function LogoutButton() {
   };
 
   return (
-    <Button 
-      variant="destructive" 
-      onClick={handleLogout}
-      className="px-4"
-    >
+    <Button variant="destructive" onClick={handleLogout} className="px-4">
       Sign Out
     </Button>
   );
