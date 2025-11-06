@@ -440,7 +440,7 @@ export function useCollaborativeEditor({
                 clientId: u.clientId,
                 position: 0,
                 color: u.color,
-                name: `User ${u.userId}`,
+                name: u.name,
               });
             });
             setRemoteUsers(users);

@@ -45,6 +45,7 @@ interface CursorUpdateMessage {
 
 interface UserSession {
   userId: number;
+  name: string;
   clientId: string;
   documentId: number;
   color: string;
@@ -357,6 +358,7 @@ export function setupWebSocket(httpServer: HTTPServer) {
         const color = getNextColor();
         const session: UserSession = {
           userId: user.id,
+          name: user.name,
           clientId,
           documentId,
           color,
@@ -380,6 +382,7 @@ export function setupWebSocket(httpServer: HTTPServer) {
           users: Array.from(room.users.values()).map(u => ({
             clientId: u.clientId,
             userId: u.userId,
+            name: u.name,
             color: u.color,
           })),
           docState: Array.from(state),
@@ -526,7 +529,7 @@ export function setupWebSocket(httpServer: HTTPServer) {
           position: message.position,
           selection: message.selection,
           color: currentSession.color,
-          name: "User", // TODO: Get actual user name
+          name: currentSession.name,
         });
       } catch (error) {
         console.error("[WebSocket] Error updating cursor:", error);
