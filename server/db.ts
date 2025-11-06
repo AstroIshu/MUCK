@@ -1,4 +1,4 @@
-import { eq, gt } from "drizzle-orm";
+import { eq, gt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -101,6 +101,22 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
 // Document queries
 export async function createDocument(name: string, ownerId: number) {
   const db = await getDb();
@@ -131,9 +147,27 @@ export async function getUserDocuments(userId: number) {
   if (!db) return [];
 
   const result = await db
-    .select()
+    .selectDistinct({
+      id: documents.id,
+      name: documents.name,
+      ownerId: documents.ownerId,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+      wordCount: documents.wordCount,
+      characterCount: documents.characterCount,
+      lastEditedBy: documents.lastEditedBy,
+    })
     .from(documents)
-    .where(eq(documents.ownerId, userId));
+    .leftJoin(
+      documentPermissions,
+      eq(documents.id, documentPermissions.documentId)
+    )
+    .where(
+      or(
+        eq(documents.ownerId, userId),
+        eq(documentPermissions.userId, userId)
+      )
+    );
 
   return result;
 }
@@ -163,6 +197,50 @@ export async function getDocumentPermissions(documentId: number) {
     .select()
     .from(documentPermissions)
     .where(eq(documentPermissions.documentId, documentId));
+
+  return result;
+}
+
+export async function insertDocumentPermission(
+  documentId: number,
+  userId: number,
+  role: "editor" | "viewer",
+  grantedBy: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(documentPermissions).values({
+    documentId,
+    userId,
+    role,
+    grantedBy,
+  });
+}
+
+export async function deleteDocumentPermission(
+  documentId: number,
+  userId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .delete(documentPermissions)
+    .where(
+      eq(documentPermissions.documentId, documentId) &&
+        eq(documentPermissions.userId, userId)
+    );
+}
+
+export async function getPermissionsForUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db
+    .select()
+    .from(documentPermissions)
+    .where(eq(documentPermissions.userId, userId));
 
   return result;
 }

@@ -4,7 +4,9 @@ import { useParams } from "wouter";
 import { useCollaborativeEditor } from "@/hooks/useCollaborativeEditor";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
-import { Users, AlertCircle, Loader2 } from "lucide-react";
+import { Users, AlertCircle, Loader2, Share2 } from "lucide-react";
+import { ShareDialog } from "@/components/ShareDialog";
+import { Button } from "@/components/ui/button";
 
 interface UserCursor {
   userId: number;
@@ -162,17 +164,24 @@ export default function Editor({ documentId: propDocId }: EditorProps) {
                 {remoteUsers.size } online
               </span>
             </div>
-            <button
+            <ShareDialog documentId={docId}>
+              <Button variant="outline" size="sm">
+                <Share2 className="w-4 h-4 mr-2" />
+                Share
+              </Button>
+            </ShareDialog>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 const url = window.location.href;
                 navigator.clipboard.writeText(url);
                 // You might want to show a toast notification here
                 // using your Toaster component
               }}
-              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
             >
-              Share Link
-            </button>
+              Copy Link
+            </Button>
             <div className={`w-2 h-2 rounded-full ${statusColor}`} />
           </div>
         </div>

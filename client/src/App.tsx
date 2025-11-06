@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Documents from "./pages/Documents";
 import Editor from "./pages/Editor";
 import LandingPage from "./pages/landing";
+import Profile from "./pages/Profile";
 import { useAuth } from "./_core/hooks/useAuth";
 import DashboardLayout from "./components/DashboardLayout";
 import { ComponentType } from "react";
@@ -62,6 +63,10 @@ function Router() {
           />
         )}
       </Route>
+      <Route
+        path="/profile"
+        component={() => <ProtectedRoute component={Profile} />}
+      />
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

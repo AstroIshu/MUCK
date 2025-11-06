@@ -4,10 +4,26 @@ import {
   getDocument,
   getDocumentPermissions,
   checkDocumentAccess,
+  insertDocumentPermission,
+  deleteDocumentPermission,
+  getPermissionsForUser,
+  getUserByEmail,
 } from "../db";
 import { TRPCError } from "@trpc/server";
 
 export const sharingRouter = router({
+  getUserByEmail: protectedProcedure
+    .input(z.object({ email: z.string().email() }))
+    .query(async ({ input }) => {
+      const user = await getUserByEmail(input.email);
+      if (!user) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+      return user;
+    }),
   // Share document with another user
   shareDocument: protectedProcedure
     .input(
@@ -29,8 +45,12 @@ export const sharingRouter = router({
           throw new TRPCError({ code: "FORBIDDEN" });
         }
 
-        // TODO: Insert permission into database
-        // await insertDocumentPermission(input.documentId, input.userId, input.role);
+        await insertDocumentPermission(
+          input.documentId,
+          input.userId,
+          input.role,
+          ctx.user.id
+        );
 
         return {
           success: true,
@@ -66,8 +86,7 @@ export const sharingRouter = router({
           throw new TRPCError({ code: "FORBIDDEN" });
         }
 
-        // TODO: Delete permission from database
-        // await deleteDocumentPermission(input.documentId, input.userId);
+        await deleteDocumentPermission(input.documentId, input.userId);
 
         return {
           success: true,
@@ -88,7 +107,7 @@ export const sharingRouter = router({
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
 
     try {
-      const permissions = await getDocumentPermissions(0); // TODO: Query by userId
+      const permissions = await getPermissionsForUser(ctx.user.id);
       return permissions.map(p => ({
         documentId: p.documentId,
         role: p.role,
