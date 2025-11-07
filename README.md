@@ -1,4 +1,4 @@
-# MUCK - Multi-User Collaborative Kit
+# Multi User Real Time Text Editor
 
 A real-time collaborative text editor enabling multiple users to simultaneously edit documents with automatic conflict resolution and live cursor tracking.
 
@@ -51,7 +51,7 @@ npm >= 9.0.0
 ### Installation
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/MUCK.git
+git clone https://github.com/AstroIshu/MUCK.git
 cd MUCK
 ```
 
@@ -111,7 +111,3 @@ MUCK/
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
