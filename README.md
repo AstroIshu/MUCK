@@ -1,78 +1,117 @@
-# Real-Time CRDT Collaborative Editor - User Guide
+# MUCK - Multi-User Collaborative Kit
 
-**Website Purpose:** A real-time collaborative text editor where multiple users can edit the same document simultaneously with automatic conflict resolution and shared cursors.
+A real-time collaborative text editor enabling multiple users to simultaneously edit documents with automatic conflict resolution and live cursor tracking.
 
-**Access:** Login required (Manus OAuth)
+## Features
 
----
+- **Real-time Collaboration**
+  - Concurrent editing with instant synchronization
+  - Live cursor and selection tracking
+  - Active users presence indicators
+  - Automatic conflict resolution
 
-This application is built with cutting-edge technologies:
+- **Document Management**
+  - Create and organize multiple documents
+  - Document statistics (word count, character count)
+  - Version history and change tracking
+  - Persistent storage of content
 
-**Frontend:** React 19 + TypeScript + Tailwind CSS 4 with shadcn/ui components for a modern, responsive interface
+- **User Experience**
+  - Clean, modern interface
+  - Responsive design
+  - Offline support with auto-reconnection
+  - Cross-platform compatibility
 
-**Backend:** Node.js + Express + tRPC for type-safe real-time communication
+## Tech Stack
 
-**Real-Time Sync:** Yjs CRDT (Conflict-free Replicated Data Type) for automatic conflict resolution and intention preservation across concurrent edits
+### Frontend
+- React 19 with TypeScript
+- Tailwind CSS 4
+- shadcn/ui components
+- Socket.io client
 
-**Database:** MySQL/TiDB with Drizzle ORM for persistent storage of documents, operations, and user sessions
+### Backend
+- Node.js with Express
+- tRPC for type-safe API
+- Yjs CRDT for conflict resolution
+- Socket.io for WebSocket communication
 
-**Transport:** Socket.io WebSocket for low-latency real-time collaboration with automatic reconnection and offline support
+### Database
+- MySQL/TiDB
+- Drizzle ORM
 
-**Deployment:** Auto-scaling infrastructure with global CDN for seamless performance
+## Getting Started
 
----
+### Prerequisites
+```bash
+node >= 18.0.0
+npm >= 9.0.0
+```
 
-## Using Your Website
+### Installation
+1. Clone the repository
+```bash
+git clone https://github.com/yourusername/MUCK.git
+cd MUCK
+```
 
-### Creating Documents
+2. Install dependencies
+```bash
+npm install
+```
 
-Click **"Create Document"** on the Documents page, enter a name, and press Enter or click the Create button. Your new document opens immediately in the editor.
+3. Configure environment
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
 
-### Editing in Real-Time
+4. Start development server
+```bash
+npm run dev
+```
 
-Type directly into the editor textarea. Your changes sync instantly to all connected collaborators. You'll see:
+## Usage
 
-- **Live cursor positions** of other users displayed in the sidebar with their assigned colors
-- **Selection ranges** shown when collaborators highlight text
-- **Active users list** showing everyone currently editing the document
-- **Connection status** indicator (green = connected, red = disconnected)
+### Document Creation
+1. Navigate to the Documents page
+2. Click "New Document"
+3. Enter document name
+4. Start editing
 
-### Viewing Collaborators
+### Collaboration
+- Share document URL with collaborators
+- View active users in right sidebar
+- See real-time cursor positions
+- Changes sync automatically
 
-The right sidebar displays:
+## Development
 
-- **Active Users:** Shows all users currently editing with their assigned color
-- **Cursors:** Real-time cursor positions and text selections from other users
+### Project Structure
+```
+MUCK/
+├── src/
+│   ├── client/     # Frontend React application
+│   ├── server/     # Backend Node.js server
+│   └── shared/     # Shared types and utilities
+├── public/         # Static assets
+└── tests/         # Test suites
+```
 
-### Word and Character Count
+### Scripts
+- `npm run dev` - Start development environment
+- `npm run build` - Build for production
+- `npm run test` - Run test suite
+- `npm run lint` - Run linting
 
-The document header shows real-time statistics: word count and character count update as you type.
+## Contributing
 
----
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-## Managing Your Website
+## License
 
-### Documents Page
-
-Access the Documents page from the home screen to:
-
-- **Create new documents** using the input field at the top
-- **View all your documents** as cards showing name, word count, character count, and last edited time
-- **Open any document** by clicking the card or the "Open" button
-
-### Editor Page
-
-The editor provides:
-
-- **Document header** with name and statistics
-- **Textarea editor** for writing content with monospace font
-- **User presence sidebar** showing active collaborators and their cursors
-- **Connection status** indicator in the top-right corner
-
-### Settings (via Management UI)
-
-Access Settings → Secrets to manage authentication tokens if needed for API integrations.
-
----
-
-Start collaborating now by creating your first document and inviting teammates to edit together!
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
