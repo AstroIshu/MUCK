@@ -367,10 +367,6 @@ Use the tRPC client (auto‑generated types) to interact.
 - **Input**: `{ documentId: number, userId: number, role: 'editor' | 'viewer' }`
 - **Returns**: Success message.
 
-### WebSocket Events
-
-See the [Architecture Overview](#-architecture-overview) for a full list of events.
-
 ---
 
 ## 🗃️ Database Schema
@@ -450,7 +446,7 @@ Please ensure your code follows the existing style (Prettier) and includes appro
 
 ## 📄 License
 
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ---
 
@@ -465,4 +461,4 @@ This project is licensed under the MIT License – see the [LICENSE](LICENSE) fi
 
 ---
 
-**Built with ❤️ by [AstroIshu](https://github.com/AstroIshu)**
+**Built with ❤️ by [AstroIshu](https://github.com/AstroIshu) & [Yash](https://github.com/Dueyash)**
